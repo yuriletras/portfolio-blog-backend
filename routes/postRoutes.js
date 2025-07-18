@@ -1,62 +1,53 @@
-// portfolio-blog-backend/routes/postRoutes.js
-// portfolio-blog-backend/routes/postRoutes.js
-
 const express = require('express');
 const router = express.Router();
-const Post = require('../models/Post');
-const Comment = require('../models/Comment'); // <-- Adicione esta linha
+const Post = require('../models/Post'); // Certifique-se de que o caminho para seu modelo Post está correto
+const auth = require('../middleware/authMiddleware'); // NOVO: Importa o middleware de autenticação
 
-// --- Rota para obter TODOS os posts (apenas resumo) ---
-// GET /api/posts
+// @route   GET /api/posts
+// @desc    Obter todos os posts do blog
+// @access  Público (não precisa de autenticação)
 router.get('/', async (req, res) => {
     try {
-        // Busca todos os posts, selecionando apenas os campos que queremos para a lista
-        const posts = await Post.find({})
-                                .select('title slug summary thumbnail author publishedAt category likes')
-                                .sort({ publishedAt: -1 }); // Ordena do mais recente para o mais antigo
-
-        res.json(posts); // Retorna os posts como JSON
+        const posts = await Post.find().sort({ date: -1 }); // Ordena por data mais recente
+        res.json(posts);
     } catch (err) {
         console.error(err.message);
-        res.status(500).send('Erro do Servidor');
+        res.status(500).send('Erro no Servidor');
     }
 });
 
-// --- Rota para obter um post ESPECÍFICO pelo SLUG ---
-// GET /api/posts/:slug
-router.get('/:slug', async (req, res) => {
+// @route   GET /api/posts/:slug (ou :id, dependendo de como você busca um único post)
+// @desc    Obter um post específico pelo slug ou ID
+// @access  Público (não precisa de autenticação)
+router.get('/:slug', async (req, res) => { // Use :slug se você busca por slug, ou :id se busca por _id
     try {
-        const post = await Post.findOne({ slug: req.params.slug });
+        // Altere para Post.findById(req.params.id) se você usa o ID do MongoDB
+        // Ou mantenha Post.findOne({ slug: req.params.slug }) se você usa slug
+        const post = await Post.findOne({ slug: req.params.slug }); // Exemplo para buscar por slug
 
         if (!post) {
             return res.status(404).json({ msg: 'Post não encontrado' });
         }
-
-        // Opcional: Incrementar o contador de visualizações
-        post.views = (post.views || 0) + 1;
-        await post.save(); // Salva a atualização no banco de dados
-
-        res.json(post); // Retorna o post completo
+        res.json(post);
     } catch (err) {
         console.error(err.message);
-        // Se o erro for um ObjectId inválido, pode ser um slug malformado
-        if (err.kind === 'ObjectId') {
-            return res.status(400).json({ msg: 'Slug de post inválido' });
+        if (err.kind === 'ObjectId') { // Se usar ID e o formato for inválido
+            return res.status(404).json({ msg: 'Post não encontrado' });
         }
-        res.status(500).send('Erro do Servidor');
+        res.status(500).send('Erro no Servidor');
     }
 });
 
-// --- Rota para criar um NOVO post (para testes iniciais) ---
-// POST /api/posts
-// Atenção: Em um ambiente real, esta rota precisaria de autenticação e validação robusta!
-router.post('/', async (req, res) => {
-    const { title, summary, content, author, thumbnail, tags, category } = req.body;
+// @route   POST /api/posts
+// @desc    Criar um novo post
+// @access  Privado (requer autenticação de admin/editor)
+router.post('/', auth, async (req, res) => { // Adiciona o middleware 'auth' aqui
+    // Você pode adicionar uma verificação de role se quiser que apenas 'admin' crie
+    // if (req.user.role !== 'admin' && req.user.role !== 'editor') {
+    //     return res.status(403).json({ msg: 'Não autorizado' });
+    // }
 
-    // Gerar um slug a partir do título (você pode usar uma biblioteca como 'slugify' para algo mais robusto)
-    const slug = title.toLowerCase()
-                      .replace(/ /g, '-')
-                      .replace(/[^\w-]+/g, '');
+    const { title, slug, summary, content, thumbnailUrl, author } = req.body;
 
     try {
         const newPost = new Post({
@@ -64,114 +55,105 @@ router.post('/', async (req, res) => {
             slug,
             summary,
             content,
-            author: author || 'Seu Nome', // Usa o autor fornecido ou um padrão
-            thumbnail,
-            tags,
-            category
+            thumbnailUrl,
+            author,
+            // Adicione o userId se quiser vincular o post ao usuário que o criou
+            // user: req.user.id
         });
 
-        const post = await newPost.save(); // Salva o novo post no DB
-        res.status(201).json(post); // Retorna o post criado com status 201 (Created)
-
+        const post = await newPost.save();
+        res.status(201).json(post); // 201 Created
     } catch (err) {
         console.error(err.message);
-        if (err.code === 11000) { // Erro de chave duplicada (slug já existe)
-            return res.status(400).json({ msg: 'Já existe um post com este título/slug.' });
+        // Erro de validação ou slug duplicado
+        if (err.code === 11000 && err.keyPattern && err.keyPattern.slug) {
+            return res.status(400).json({ msg: 'O slug já existe. Escolha outro.' });
         }
-        res.status(500).send('Erro do Servidor');
+        res.status(500).send('Erro no Servidor');
     }
 });
 
-// portfolio-blog-backend/routes/postRoutes.js
+// @route   PUT /api/posts/:id
+// @desc    Atualizar um post existente
+// @access  Privado (requer autenticação de admin/editor)
+router.put('/:id', auth, async (req, res) => { // Adiciona o middleware 'auth' aqui
+    // Você pode adicionar verificação de role e/ou se o usuário é o autor do post
+    // if (req.user.role !== 'admin' && req.user.role !== 'editor') {
+    //     return res.status(403).json({ msg: 'Não autorizado' });
+    // }
 
-// ... (código existente das rotas GET / e GET /:slug, e POST /) ...
+    const { title, slug, summary, content, thumbnailUrl, author } = req.body;
 
-// --- Rota para CURTIR um post ---
-// PUT /api/posts/:slug/like
-router.put('/:slug/like', async (req, res) => {
+    // Constrói o objeto de campos do post
+    const postFields = {};
+    if (title) postFields.title = title;
+    if (slug) postFields.slug = slug;
+    if (summary) postFields.summary = summary;
+    if (content) postFields.content = content;
+    if (thumbnailUrl) postFields.thumbnailUrl = thumbnailUrl;
+    if (author) postFields.author = author;
+    postFields.updatedAt = Date.now(); // Atualiza a data de modificação
+
     try {
-        const post = await Post.findOne({ slug: req.params.slug });
+        let post = await Post.findById(req.params.id);
+
+        if (!post) return res.status(404).json({ msg: 'Post não encontrado' });
+
+        // Opcional: Verificar se o usuário que está editando é o autor ou um admin
+        // if (post.user.toString() !== req.user.id && req.user.role !== 'admin') {
+        //     return res.status(401).json({ msg: 'Não autorizado a editar este post' });
+        // }
+
+        post = await Post.findByIdAndUpdate(
+            req.params.id,
+            { $set: postFields },
+            { new: true } // Retorna o documento atualizado
+        );
+
+        res.json(post);
+    } catch (err) {
+        console.error(err.message);
+        if (err.kind === 'ObjectId') {
+            return res.status(404).json({ msg: 'Post não encontrado' });
+        }
+        if (err.code === 11000 && err.keyPattern && err.keyPattern.slug) {
+            return res.status(400).json({ msg: 'O slug já existe. Escolha outro.' });
+        }
+        res.status(500).send('Erro no Servidor');
+    }
+});
+
+// @route   DELETE /api/posts/:id
+// @desc    Deletar um post
+// @access  Privado (requer autenticação de admin/editor)
+router.delete('/:id', auth, async (req, res) => { // Adiciona o middleware 'auth' aqui
+    // Você pode adicionar verificação de role e/ou se o usuário é o autor do post
+    // if (req.user.role !== 'admin' && req.user.role !== 'editor') {
+    //     return res.status(403).json({ msg: 'Não autorizado' });
+    // }
+
+    try {
+        const post = await Post.findById(req.params.id);
 
         if (!post) {
             return res.status(404).json({ msg: 'Post não encontrado' });
         }
 
-        // Incrementa o contador de curtidas
-        post.likes = (post.likes || 0) + 1;
-        await post.save(); // Salva a atualização no banco de dados
+        // Opcional: Verificar se o usuário que está deletando é o autor ou um admin
+        // if (post.user.toString() !== req.user.id && req.user.role !== 'admin') {
+        //     return res.status(401).json({ msg: 'Não autorizado a deletar este post' });
+        // }
 
-        res.json(post); // Retorna o post atualizado (com a nova contagem de curtidas)
+        await Post.findByIdAndDelete(req.params.id);
 
+        res.json({ msg: 'Post removido com sucesso' });
     } catch (err) {
         console.error(err.message);
-        res.status(500).send('Erro do Servidor');
-    }
-});
-
-// portfolio-blog-backend/routes/postRoutes.js
-
-// ... (código existente das rotas GET /, GET /:slug, POST /, PUT /:slug/like) ...
-
-// --- Rotas para COMENTÁRIOS ---
-
-// @route   POST /api/posts/:slug/comments
-// @desc    Adicionar um comentário a um post
-// @access  Public
-router.post('/:slug/comments', async (req, res) => {
-    const { author, content } = req.body; // Pega autor e conteúdo do corpo da requisição
-
-    // Validação básica
-    if (!author || !content) {
-        return res.status(400).json({ msg: 'Por favor, preencha todos os campos do comentário.' });
-    }
-
-    try {
-        const post = await Post.findOne({ slug: req.params.slug });
-
-        if (!post) {
-            return res.status(404).json({ msg: 'Post não encontrado.' });
+        if (err.kind === 'ObjectId') {
+            return res.status(404).json({ msg: 'Post não encontrado' });
         }
-
-        const newComment = new Comment({
-            post: post._id, // Associa o comentário ao ID do post
-            author,
-            content
-        });
-
-        await newComment.save(); // Salva o novo comentário no banco de dados
-
-        // Opcional: Você pode querer adicionar o ID do comentário ao array de comentários do post
-        // post.comments.push(newComment._id); // Isso exigiria um array de ObjectIds no modelo Post
-        // await post.save();
-
-        res.status(201).json(newComment); // Retorna o comentário criado com status 201 (Created)
-
-    } catch (err) {
-        console.error(err.message);
-        res.status(500).send('Erro do Servidor');
+        res.status(500).send('Erro no Servidor');
     }
 });
 
-// @route   GET /api/posts/:slug/comments
-// @desc    Obter todos os comentários de um post
-// @access  Public
-router.get('/:slug/comments', async (req, res) => {
-    try {
-        const post = await Post.findOne({ slug: req.params.slug });
-
-        if (!post) {
-            return res.status(404).json({ msg: 'Post não encontrado.' });
-        }
-
-        // Encontra todos os comentários associados a este post
-        const comments = await Comment.find({ post: post._id }).sort({ publishedAt: -1 }); // Ordena do mais novo para o mais antigo
-
-        res.json(comments); // Retorna a lista de comentários
-
-    } catch (err) {
-        console.error(err.message);
-        res.status(500).send('Erro do Servidor');
-    }
-});
-
-module.exports = router; // Exporta o router para ser usado no server.js
+module.exports = router;
