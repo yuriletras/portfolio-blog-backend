@@ -19,11 +19,12 @@ router.get('/', async (req, res) => {
 // @route   GET /api/posts/:slug (ou :id, dependendo de como você busca um único post)
 // @desc    Obter um post específico pelo slug ou ID
 // @access  Público (não precisa de autenticação)
-router.get('/:slug', async (req, res) => { // Use :slug se você busca por slug, ou :id se busca por _id
+router.get('/:id', async (req, res) => { // Mude :slug para :id aqui
     try {
-        // Altere para Post.findById(req.params.id) se você usa o ID do MongoDB
-        // Ou mantenha Post.findOne({ slug: req.params.slug }) se você usa slug
-        const post = await Post.findOne({ slug: req.params.slug }); // Exemplo para buscar por slug
+        const postId = req.params.id; // Captura o ID da URL
+
+        // Altere para Post.findById(postId) para buscar por ID do MongoDB
+        const post = await Post.findById(postId); // <-- MUDANÇA AQUI
 
         if (!post) {
             return res.status(404).json({ msg: 'Post não encontrado' });
@@ -31,8 +32,9 @@ router.get('/:slug', async (req, res) => { // Use :slug se você busca por slug,
         res.json(post);
     } catch (err) {
         console.error(err.message);
-        if (err.kind === 'ObjectId') { // Se usar ID e o formato for inválido
-            return res.status(404).json({ msg: 'Post não encontrado' });
+        // Esta verificação é importante para lidar com IDs mal formatados
+        if (err.name === 'CastError') { // Verifica se o erro é de formatação inválida do ID
+            return res.status(400).json({ msg: 'ID do post inválido.' }); // Retorna 400 para ID inválido
         }
         res.status(500).send('Erro no Servidor');
     }
