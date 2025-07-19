@@ -2,59 +2,82 @@
 
 const mongoose = require('mongoose');
 
-const postSchema = new mongoose.Schema({
-    title: {
-        type: String,
-        required: true,
-        trim: true // Remove espaços em branco do início/fim
-    },
-    slug: { // URL amigável (ex: "como-criar-um-blog")
-        type: String,
-        required: true,
-        unique: true, // Garante que cada slug é único
-        lowercase: true // Converte para minúsculas
-    },
-    summary: { // Pequeno resumo para a lista de posts
+// 1. Defina o esquema para os comentários primeiro
+const CommentSchema = new mongoose.Schema({
+    author: {
         type: String,
         required: true,
         trim: true
     },
-    content: { // Conteúdo completo do post
+    content: {
+        type: String,
+        required: true,
+        trim: true
+    },
+    publishedAt: {
+        type: Date,
+        default: Date.now
+    }
+}, {
+    timestamps: false // Comentários não precisam de seus próprios createdAt/updatedAt se você gerenciar 'publishedAt'
+});
+
+
+const postSchema = new mongoose.Schema({
+    title: {
+        type: String,
+        required: true,
+        trim: true
+    },
+    slug: {
+        type: String,
+        required: true,
+        unique: true,
+        lowercase: true
+    },
+    summary: {
+        type: String,
+        required: true,
+        trim: true
+    },
+    content: {
         type: String,
         required: true
     },
     author: {
         type: String,
-        default: 'Seu Nome' // Pode ser seu nome padrão
+        default: 'Seu Nome'
     },
-    thumbnail: { // URL da imagem de capa/thumbnail
+    thumbnail: {
         type: String,
-        default: '' // Pode ser opcional ou ter uma imagem padrão
+        default: ''
     },
-    tags: [String], // Array de strings para tags (ex: ['react', 'node', 'frontend'])
-    category: { // Categoria do post (ex: 'desenvolvimento', 'carreira')
+    tags: [String],
+    category: {
         type: String,
         required: true,
-        enum: ['Frontend', 'Backend', 'DevOps', 'Carreira', 'Outros'] // Categorias permitidas
+        enum: ['Frontend', 'Backend', 'DevOps', 'Carreira', 'Outros']
     },
-    likes: { // Contador de curtidas
+    likes: {
         type: Number,
         default: 0
     },
-    views: { // Contador de visualizações (opcional)
+    views: {
         type: Number,
         default: 0
     },
-    publishedAt: { // Data de publicação
-        type: Date,
-        default: Date.now // Define a data atual como padrão ao criar
-    },
-    updatedAt: { // Data da última atualização
+    publishedAt: {
         type: Date,
         default: Date.now
-    }
+    },
+    updatedAt: {
+        type: Date,
+        default: Date.now
+    },
+    // 2. ADICIONE A PROPRIEDADE 'comments' QUE É UM ARRAY DO CommentSchema
+    comments: [CommentSchema] // <--- ADIÇÃO ESSENCIAL AQUI!
 }, {
-    timestamps: true // Adiciona automaticamente createdAt e updatedAt (createdAt e updatedAt)
+    timestamps: true // Adiciona automaticamente createdAt e updatedAt (para o Post principal)
 });
 
 // Middleware para atualizar o 'updatedAt' sempre que o post for salvo
