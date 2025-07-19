@@ -34,7 +34,7 @@ router.get('/:id', async (req, res) => {
         if (err.name === 'CastError') {
             return res.status(400).json({ msg: 'ID do post inválido.' });
         }
-        res.status(500).send('Erro no Servidor');
+        res.status(500).json({ msg: 'Erro interno do Servidor.' }); // Retorna JSON
     }
 });
 
