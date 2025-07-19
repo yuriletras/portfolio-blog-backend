@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const Post = require('../models/Post'); // Certifique-se de que o caminho para seu modelo Post está correto
-const auth = require('../middleware/authMiddleware'); // NOVO: Importa o middleware de autenticação
+const auth = require('../middleware/authMiddleware'); // Importa o middleware de autenticação
 
 // @route   GET /api/posts
 // @desc    Obter todos os posts do blog
@@ -16,15 +16,13 @@ router.get('/', async (req, res) => {
     }
 });
 
-// @route   GET /api/posts/:id // MUDANÇA AQUI: de :slug para :id
-// @desc    Obter um post específico pelo ID // MUDANÇA AQUI: de SLUG para ID
+// @route   GET /api/posts/:id
+// @desc    Obter um post específico pelo ID
 // @access  Público (não precisa de autenticação)
-// ATENÇÃO: Se você usa ID aqui, o frontend deve enviar o ID do MongoDB.
-router.get('/:id', async (req, res) => { // MUDANÇA AQUI: de :slug para :id
+router.get('/:id', async (req, res) => {
     try {
-        const postId = req.params.id; // MUDANÇA AQUI: Pega o ID da URL
+        const postId = req.params.id;
 
-        // MUDANÇA AQUI: Altera de findOne para findById para buscar pelo ID
         const post = await Post.findById(postId); // Busca pelo ID
 
         if (!post) {
@@ -33,7 +31,6 @@ router.get('/:id', async (req, res) => { // MUDANÇA AQUI: de :slug para :id
         res.json(post);
     } catch (err) {
         console.error(err.message);
-        // MUDANÇA AQUI: Tratamento de erro para ID inválido do MongoDB
         if (err.name === 'CastError') {
             return res.status(400).json({ msg: 'ID do post inválido.' });
         }
@@ -45,8 +42,7 @@ router.get('/:id', async (req, res) => { // MUDANÇA AQUI: de :slug para :id
 // @desc    Criar um novo post
 // @access  Privado (requer autenticação de admin/editor)
 router.post('/', auth, async (req, res) => {
-    // AQUI: Mude de 'thumbnailUrl' para 'thumbnail'
-    const { title, slug, summary, content, thumbnail, author } = req.body; // Alterado para 'thumbnail'
+    const { title, slug, summary, content, thumbnail, author } = req.body;
 
     try {
         const newPost = new Post({
@@ -54,7 +50,7 @@ router.post('/', auth, async (req, res) => {
             slug,
             summary,
             content,
-            thumbnail, // AQUI: Atribuindo 'thumbnail' ao campo 'thumbnail' do modelo
+            thumbnail,
             author,
         });
 
@@ -69,36 +65,30 @@ router.post('/', auth, async (req, res) => {
     }
 });
 
-// @route   PUT /api/posts/:id // MUDANÇA AQUI: de :slug para :id
+// @route   PUT /api/posts/:id
 // @desc    Atualizar um post existente
 // @access  Privado (requer autenticação de admin/editor)
-router.put('/:id', auth, async (req, res) => { // MUDANÇA AQUI: de :slug para :id
-    // AQUI: Mude de 'thumbnailUrl' para 'thumbnail'
-    const { title, slug, summary, content, thumbnail, author } = req.body; // Alterado para 'thumbnail', slug pode ser atualizável aqui se necessário
+router.put('/:id', auth, async (req, res) => {
+    const { title, slug, summary, content, thumbnail, author } = req.body;
 
     const postFields = {};
     if (title) postFields.title = title;
-    // Se o slug pode ser editado mas o ID é o identificador, mantenha-o aqui:
-    if (slug) postFields.slug = slug;
+    if (slug) postFields.slug = slug; // Manter a possibilidade de atualização de slug via ID
     if (summary) postFields.summary = summary;
     if (content) postFields.content = content;
-
-    // AQUI: Atribua o valor recebido ('thumbnail') ao campo 'thumbnail' do modelo
-    if (thumbnail !== undefined) { // Permite que a thumbnail seja salva como string vazia se o campo for limpo
+    if (thumbnail !== undefined) {
         postFields.thumbnail = thumbnail;
     }
     if (author) postFields.author = author;
-    postFields.updatedAt = Date.now(); // Atualiza a data de modificação
+    postFields.updatedAt = Date.now();
 
     try {
-        // MUDANÇA AQUI: Encontre o post pelo ID, não pelo slug
         let post = await Post.findById(req.params.id); // Busca pelo ID
 
         if (!post) return res.status(404).json({ msg: 'Post não encontrado' });
 
-        // MUDANÇA AQUI: De findOneAndUpdate para findByIdAndUpdate
-        post = await Post.findByIdAndUpdate( // Critério de busca pelo ID
-            req.params.id, // MUDANÇA AQUI: Usa req.params.id
+        post = await Post.findByIdAndUpdate(
+            req.params.id,
             { $set: postFields },
             { new: true }
         );
@@ -106,7 +96,6 @@ router.put('/:id', auth, async (req, res) => { // MUDANÇA AQUI: de :slug para :
         res.json(post);
     } catch (err) {
         console.error(err.message);
-        // MUDANÇA AQUI: Tratamento de erro para ID inválido
         if (err.name === 'CastError') {
             return res.status(400).json({ msg: 'ID do post inválido.' });
         }
@@ -117,12 +106,11 @@ router.put('/:id', auth, async (req, res) => { // MUDANÇA AQUI: de :slug para :
     }
 });
 
-// @route   DELETE /api/posts/:id // MUDANÇA AQUI: de :slug para :id
+// @route   DELETE /api/posts/:id
 // @desc    Deletar um post
 // @access  Privado (requer autenticação de admin/editor)
-router.delete('/:id', auth, async (req, res) => { // MUDANÇA AQUI: de :slug para :id
+router.delete('/:id', auth, async (req, res) => {
     try {
-        // MUDANÇA AQUI: De findOneAndDelete para findByIdAndDelete
         const post = await Post.findByIdAndDelete(req.params.id); // Busca e deleta pelo ID
 
         if (!post) {
@@ -132,7 +120,6 @@ router.delete('/:id', auth, async (req, res) => { // MUDANÇA AQUI: de :slug par
         res.json({ msg: 'Post removido com sucesso' });
     } catch (err) {
         console.error(err.message);
-        // MUDANÇA AQUI: Tratamento de erro para ID inválido
         if (err.name === 'CastError') {
             return res.status(400).json({ msg: 'ID do post inválido.' });
         }
@@ -140,10 +127,41 @@ router.delete('/:id', auth, async (req, res) => { // MUDANÇA AQUI: de :slug par
     }
 });
 
+// NOVO: Rota para curtir um post
+// @route   PUT /api/posts/:id/like
+// @desc    Incrementa o contador de likes de um post
+// @access  Público (ou Privado, se você quiser autenticação para curtir)
+router.put('/:id/like', async (req, res) => {
+    try {
+        const postId = req.params.id;
+
+        const post = await Post.findById(postId);
+
+        if (!post) {
+            return res.status(404).json({ msg: 'Post não encontrado.' });
+        }
+
+        // Garante que o campo 'likes' existe e é um número
+        if (typeof post.likes !== 'number') {
+            post.likes = 0; // Inicializa se for undefined ou não for número
+        }
+        post.likes += 1; // Incrementa o contador de likes
+
+        await post.save();
+        res.json({ msg: 'Post curtido com sucesso!', likes: post.likes });
+
+    } catch (err) {
+        console.error(err.message);
+        if (err.name === 'CastError') {
+            return res.status(400).json({ msg: 'ID do post inválido para curtir.' });
+        }
+        res.status(500).send('Erro no Servidor ao curtir o post.');
+    }
+});
 
 // @route   POST /api/posts/:id/comments
 // @desc    Adicionar um comentário a um post
-// @access  Público (geralmente comentários não exigem autenticação)
+// @access  Público
 router.post('/:id/comments', async (req, res) => {
     try {
         const { id } = req.params; // ID do post
@@ -199,6 +217,5 @@ router.get('/:id/comments', async (req, res) => {
         res.status(500).send('Erro no Servidor ao carregar comentários.');
     }
 });
-
 
 module.exports = router;
