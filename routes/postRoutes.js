@@ -61,7 +61,7 @@ router.post('/', auth, async (req, res) => {
         if (err.code === 11000 && err.keyPattern && err.keyPattern.slug) {
             return res.status(400).json({ msg: 'O slug já existe. Escolha outro.' });
         }
-        res.status(500).send('Erro no Servidor');
+         res.status(500).json({ msg: 'Erro interno do Servidor ao criar o post.' }); // Retorna JSON
     }
 });
 
