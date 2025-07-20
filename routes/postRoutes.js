@@ -42,7 +42,7 @@ router.get('/:id', async (req, res) => {
 // @desc    Criar um novo post
 // @access  Privado (requer autenticação de admin/editor)
 router.post('/', auth, async (req, res) => {
-    const { title, slug, summary, content, thumbnail, author } = req.body;
+     const { title, slug, summary, content, thumbnail, author, category } = req.body;
 
     try {
         const newPost = new Post({
@@ -52,6 +52,7 @@ router.post('/', auth, async (req, res) => {
             content,
             thumbnail,
             author,
+            category,
         });
 
         const post = await newPost.save();
@@ -69,7 +70,7 @@ router.post('/', auth, async (req, res) => {
 // @desc    Atualizar um post existente
 // @access  Privado (requer autenticação de admin/editor)
 router.put('/:id', auth, async (req, res) => {
-    const { title, slug, summary, content, thumbnail, author } = req.body;
+    const { title, slug, summary, content, thumbnail, author, category } = req.body;
 
     const postFields = {};
     if (title) postFields.title = title;
@@ -80,6 +81,7 @@ router.put('/:id', auth, async (req, res) => {
         postFields.thumbnail = thumbnail;
     }
     if (author) postFields.author = author;
+    if (category) postFields.category = category;
     postFields.updatedAt = Date.now();
 
     try {
