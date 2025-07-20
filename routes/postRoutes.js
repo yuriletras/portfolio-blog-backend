@@ -17,24 +17,46 @@ router.get('/', async (req, res) => {
 });
 
 // @route   GET /api/posts/:id
-// @desc    Obter um post específico pelo ID
+// @desc    Obter um post específico pelo ID e incrementar visualizações
 // @access  Público (não precisa de autenticação)
 router.get('/:id', async (req, res) => {
     try {
         const postId = req.params.id;
 
-        const post = await Post.findById(postId); // Busca pelo ID
+        // 1. Encontra o post
+        let post = await Post.findById(postId); // Use 'let' para poder modificar o objeto 'post'
 
         if (!post) {
             return res.status(404).json({ msg: 'Post não encontrado' });
         }
-        res.json(post);
+
+        // 2. Incrementa o contador de visualizações
+        // Garante que 'views' comece em 0 se for a primeira visualização (ou se for null/undefined)
+        post.views = (post.views || 0) + 1;
+
+        // 3. Salva a alteração no banco de dados
+        await post.save(); 
+        
+        // Se preferir uma abordagem mais atômica com findByIdAndUpdate (descomente e remova as 3 linhas acima, incluindo 'let post = ...')
+        // const post = await Post.findByIdAndUpdate(
+        //     postId,
+        //     { $inc: { views: 1 } }, // Usa o operador $inc do MongoDB para incrementar em 1
+        //     { new: true } // Retorna o documento *modificado* com o views já incrementado
+        // );
+        // if (!post) { // Verificação necessária também se usar findByIdAndUpdate
+        //     return res.status(404).json({ msg: 'Post não encontrado' });
+        // }
+
+        // 4. Retorna o post atualizado para o frontend
+        res.json(post); 
+
     } catch (err) {
         console.error(err.message);
+        // Garante que o erro seja um CastError (ID inválido) antes de retornar 400
         if (err.name === 'CastError') {
             return res.status(400).json({ msg: 'ID do post inválido.' });
         }
-        res.status(500).json({ msg: 'Erro interno do Servidor.' }); // Retorna JSON
+        res.status(500).json({ msg: 'Erro interno do Servidor.' }); // Retorna JSON em caso de erro genérico
     }
 });
 
@@ -42,7 +64,7 @@ router.get('/:id', async (req, res) => {
 // @desc    Criar um novo post
 // @access  Privado (requer autenticação de admin/editor)
 router.post('/', auth, async (req, res) => {
-     const { title, slug, summary, content, thumbnail, author, category } = req.body;
+    const { title, slug, summary, content, thumbnail, author, category } = req.body;
 
     try {
         const newPost = new Post({
@@ -53,16 +75,18 @@ router.post('/', auth, async (req, res) => {
             thumbnail,
             author,
             category,
+            // 'likes' e 'views' não são definidos aqui, pois terão valores padrão 0 ou serão incrementados depois
         });
 
         const post = await newPost.save();
         res.status(201).json(post);
     } catch (err) {
         console.error(err.message);
+        // Erro de duplicidade de slug
         if (err.code === 11000 && err.keyPattern && err.keyPattern.slug) {
             return res.status(400).json({ msg: 'O slug já existe. Escolha outro.' });
         }
-         res.status(500).json({ msg: 'Erro interno do Servidor ao criar o post.' }); // Retorna JSON
+        res.status(500).json({ msg: 'Erro interno do Servidor ao criar o post.' });
     }
 });
 
@@ -74,25 +98,29 @@ router.put('/:id', auth, async (req, res) => {
 
     const postFields = {};
     if (title) postFields.title = title;
-    if (slug) postFields.slug = slug; // Manter a possibilidade de atualização de slug via ID
+    if (slug) postFields.slug = slug;
     if (summary) postFields.summary = summary;
     if (content) postFields.content = content;
-    if (thumbnail !== undefined) {
+    if (thumbnail !== undefined) { // Permite definir thumbnail como null/empty string se necessário
         postFields.thumbnail = thumbnail;
     }
     if (author) postFields.author = author;
     if (category) postFields.category = category;
-    postFields.updatedAt = Date.now();
+    postFields.updatedAt = Date.now(); // Atualiza a data de atualização
 
     try {
-        let post = await Post.findById(req.params.id); // Busca pelo ID
+        let post = await Post.findById(req.params.id);
 
         if (!post) return res.status(404).json({ msg: 'Post não encontrado' });
 
+        // Apenas para garantir que 'likes' e 'views' não sejam sobrescritos acidentalmente se não estiverem no req.body
+        // Se você não enviar 'likes' ou 'views' no body, eles serão mantidos pelo $set
+        // Se você quiser permitir atualização manual de likes/views (menos comum), adicione ao postFields
+        
         post = await Post.findByIdAndUpdate(
             req.params.id,
             { $set: postFields },
-            { new: true }
+            { new: true } // Retorna o documento modificado
         );
 
         res.json(post);
@@ -113,7 +141,7 @@ router.put('/:id', auth, async (req, res) => {
 // @access  Privado (requer autenticação de admin/editor)
 router.delete('/:id', auth, async (req, res) => {
     try {
-        const post = await Post.findByIdAndDelete(req.params.id); // Busca e deleta pelo ID
+        const post = await Post.findByIdAndDelete(req.params.id);
 
         if (!post) {
             return res.status(404).json({ msg: 'Post não encontrado' });
@@ -129,7 +157,6 @@ router.delete('/:id', auth, async (req, res) => {
     }
 });
 
-// NOVO: Rota para curtir um post
 // @route   PUT /api/posts/:id/like
 // @desc    Incrementa o contador de likes de um post
 // @access  Público (ou Privado, se você quiser autenticação para curtir)
@@ -188,7 +215,7 @@ router.post('/:id/comments', async (req, res) => {
         post.comments.push(newComment);
         await post.save();
 
-        res.status(201).json(newComment);
+        res.status(201).json(newComment); // Retorna o novo comentário
     } catch (err) {
         console.error(err.message);
         if (err.name === 'CastError') {
@@ -210,7 +237,7 @@ router.get('/:id/comments', async (req, res) => {
             return res.status(404).json({ msg: 'Post não encontrado.' });
         }
 
-        res.json(post.comments);
+        res.json(post.comments); // Retorna apenas os comentários
     } catch (err) {
         console.error(err.message);
         if (err.name === 'CastError') {
