@@ -56,7 +56,7 @@ const postSchema = new mongoose.Schema({
     category: {
         type: String,
         required: true,
-        enum: ['Frontend', 'Backend', 'DevOps', 'Carreira', 'Outros']
+         enum: ['Programação', 'Inteligência Artificial', 'Carreira', 'Tecnologia', 'Desenvolvimento Web', 'Outros']
     },
     likes: {
         type: Number,
